@@ -1,19 +1,33 @@
 {
   "name": "resume-site",
   "private": true,
+  "type": "module",
   "scripts": {
-    "build": "node scripts/build.mjs",
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "html": "html-validate \"site/**/*.html\"",
-    "links": "linkinator dist --recurse --verbosity none",
+    "html": "html-validate index.html \"dist/**/*.html\"",
+    "links": "node scripts/links-scan.mjs",
     "privacy": "node scripts/privacy-scan.mjs",
     "test": "node --test",
-    "check": "npm run format:check && npm run html && npm run build && npm run links && npm run privacy && npm run test"
+    "check": "npm run format:check && npm run build && npm run html && npm run links && npm run privacy && npm run test"
+  },
+  "dependencies": {
+    "@fontsource-variable/inter": "^5.2.8",
+    "@fontsource/jetbrains-mono": "^5.2.8",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
   },
   "devDependencies": {
+    "@types/node": "^26.6.5",
+    "@types/react": "^19.2.2",
+    "@types/react-dom": "^19.2.2",
+    "@vitejs/plugin-react": "^5.1.0",
     "html-validate": "^11.17.0",
     "linkinator": "^8.1.0",
-    "prettier": "^3.9.10"
+    "prettier": "^3.9.10",
+    "typescript": "^5.9.3",
+    "vite": "^7.1.12"
   }
 }

@@ -18,11 +18,11 @@ const skillDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(skillDir, "../../..");
 const evidenceRoot = path.join(repoRoot, "verify-evidence");
 const instancePath = path.join(evidenceRoot, "instance.json");
-const heading = "Mike Morse";
-const sentence = "This page is a placeholder. The resume is not published yet.";
+const heading = "Michael Morse";
+const sentence = "Framingham, MA";
 
 const featureChecks = {
-  "placeholder-page": ["heading", "sentence", "title"],
+  "resume-page": ["heading", "sentence", "title"],
   stylesheet: ["stylesheet", "color", "font", "width"],
   "project-path": ["project-path", "heading"],
 };
@@ -220,7 +220,7 @@ async function doctor() {
     return;
   }
   if (!body.includes(sentence)) {
-    fail("response body is missing the placeholder sentence");
+    fail("response body is missing the location line");
     return;
   }
   process.stdout.write(`doctor ok ${instance.url}\n`);
@@ -248,14 +248,14 @@ function unmet(feature, snapshot) {
     }
   }
   if (checks.includes("color")) {
-    if (observed.color !== "rgb(34, 34, 34)") {
+    if (observed.color !== "rgb(231, 238, 246)") {
       problems.push(`color ${observed.color}`);
     }
-    if (observed.background !== "rgb(255, 255, 255)") {
+    if (observed.background !== "rgb(12, 18, 28)") {
       problems.push(`background ${observed.background}`);
     }
   }
-  if (checks.includes("font") && !observed.fontFamily.includes("system-ui")) {
+  if (checks.includes("font") && !observed.fontFamily.includes("Inter")) {
     problems.push(`font ${observed.fontFamily}`);
   }
   if (checks.includes("width") && observed.maxWidth === "none") {
@@ -429,7 +429,7 @@ async function capturePage(url, chromeBin, screenshot) {
             color: root.color,
             background: root.backgroundColor,
             fontFamily: body.fontFamily,
-            maxWidth: body.maxWidth,
+            maxWidth: getComputedStyle(document.querySelector(".deck")).maxWidth,
             pageUrl: location.href,
           };
         })()`,

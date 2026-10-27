@@ -14,7 +14,7 @@ This directory is the source for verifying what a visitor can see. Read this ind
 ## Driving conventions
 
 - Start every recipe from the baseline above.
-- The page has one heading, one paragraph, and one stylesheet link. There are no buttons.
+- The page has one heading, the location line, and one stylesheet link. There are no buttons.
 - Treat every `ctl.mjs` command as literal.
 - Run the browser through `node .cursor/skills/verify-resume-site/ctl.mjs drive <feature>`.
 - Leave `verify-evidence/<feature>/` in place during cleanup.
@@ -25,7 +25,7 @@ This directory is the source for verifying what a visitor can see. Read this ind
 - UI proof is `page.png` plus `result.json` for that feature.
 - Record the feature id in `result.json`.
 - If launch cannot become ready, report the command and the unmet precondition. Do not mark another URL as a substitute.
-- Fetch `https://mmorsecode.github.io/resume-site/` for the published page. After Pages was enabled on Oct 27, 2026, it returned HTTP 200 and matched `site/index.html`. A missing page means Pages is off. Browser steps still use the local URL in `instance.json`.
+- Fetch `https://mmorsecode.github.io/resume-site/` for the published page. A missing page means Pages is off. Browser steps still use the local URL in `instance.json`. The published page changes only after a merge to `main`.
 
 ## Feature entry contract
 
@@ -38,6 +38,6 @@ Each feature file starts with an H1 and one paragraph, then four H2 sections in 
 
 ## Features
 
-- [Read the placeholder](./placeholder-page.md) covers the heading and the placeholder sentence at the local project URL.
-- [Load the stylesheet](./stylesheet.md) covers the relative `styles.css` link and the computed color, background, font, and width.
+- [Read the resume](./resume-page.md) covers the heading and the location line at the local project URL.
+- [Load the stylesheet](./stylesheet.md) covers the relative `styles.css` link and the computed color, background, font, and deck width.
 - [Open the project path](./project-path.md) covers the same page at `/resume-site/` rather than at the host root.
