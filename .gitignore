@@ -2,3 +2,4 @@ node_modules/
 dist/
 dist.tmp/
 dist.previous/
+verify-evidence/
