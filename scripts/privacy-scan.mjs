@@ -24,11 +24,15 @@ function listPaths() {
 let findings = 0;
 
 for (const filePath of listPaths()) {
-  const data = await readFile(filePath);
-  if (data.includes(0)) {
-    continue;
+  let data;
+  try {
+    data = await readFile(filePath);
+  } catch (error) {
+    if (error.code === "ENOENT") {
+      continue;
+    }
+    throw error;
   }
-
   const text = data.toString("utf8");
   for (const rule of rules) {
     rule.pattern.lastIndex = 0;
