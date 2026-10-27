@@ -52,6 +52,11 @@ function serverNotListening(error) {
   return code === "ECONNREFUSED" || code === "ECONNRESET";
 }
 
+function commandOnPath(name) {
+  const result = spawnSync(name, ["--version"], { stdio: "ignore" });
+  return result.status === 0;
+}
+
 function pidAlive(pid) {
   try {
     process.kill(pid, 0);
@@ -122,6 +127,12 @@ async function launch() {
     fail(`Node ${process.version} does not match .nvmrc 22`);
     return;
   }
+  if (!commandOnPath("python3")) {
+    fail(
+      "python3 is missing. launch serves the site with python3 -m http.server",
+    );
+    return;
+  }
 
   if (run("npm", ["ci"]) !== 0 || run("npm", ["run", "build"]) !== 0) {
     fail("npm ci or npm run build failed");
@@ -187,6 +198,12 @@ async function doctor() {
   }
   if (!process.version.startsWith("v22.")) {
     fail(`Node ${process.version} does not match .nvmrc 22`);
+    return;
+  }
+  if (!commandOnPath("python3")) {
+    fail(
+      "python3 is missing. the recorded server was started with python3 -m http.server",
+    );
     return;
   }
   try {
