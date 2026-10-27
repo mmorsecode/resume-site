@@ -25,7 +25,7 @@ This directory is the source for verifying what a visitor can see. Read this ind
 - UI proof is `page.png` plus `result.json` for that feature.
 - Record the feature id in `result.json`.
 - If launch cannot become ready, report the command and the unmet precondition. Do not mark another URL as a substitute.
-- Fetch `https://mmorsecode.github.io/resume-site/` for the published page. After Pages attempt 2 on 2026-10-27 it returned 200 and matched `site/index.html`. A 404 means Pages is off. The drive commands still use the local URL in `instance.json`.
+- Fetch `https://mmorsecode.github.io/resume-site/` for the published page. After Pages was enabled on Oct 27, 2026, it returned HTTP 200 and matched `site/index.html`. A missing page means Pages is off. Browser steps still use the local URL in `instance.json`.
 
 ## Feature entry contract
 

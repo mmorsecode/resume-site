@@ -25,5 +25,5 @@ Preconditions:
 ## Gotchas
 
 - A file:// open of `site/index.html` is a different entry point. This feature is the HTTP URL from `instance.json`.
-- If `https://mmorsecode.github.io/resume-site/` returns 404, Pages is off. Do not count that 404 as a failed heading. The drive command uses the local URL. When the host returns 200, compare the body with `site/index.html`.
+- If `https://mmorsecode.github.io/resume-site/` returns 404, Pages is off. Do not count that 404 as a failed heading. Browser steps use the local URL. When the host returns HTTP 200, compare the body with `site/index.html`.
 - There is no second page. A missing heading fails this feature. Do not pass it from the stylesheet file alone.
