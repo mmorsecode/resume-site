@@ -1,0 +1,19 @@
+{
+  "name": "resume-site",
+  "private": true,
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "html": "html-validate \"site/**/*.html\"",
+    "links": "linkinator dist --recurse --verbosity none",
+    "privacy": "node scripts/privacy-scan.mjs",
+    "test": "node --test",
+    "check": "npm run format:check && npm run html && npm run build && npm run links && npm run privacy && npm run test"
+  },
+  "devDependencies": {
+    "html-validate": "^11.17.0",
+    "linkinator": "^8.1.0",
+    "prettier": "^3.9.10"
+  }
+}
