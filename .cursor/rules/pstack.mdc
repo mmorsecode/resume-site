@@ -1,0 +1,16 @@
+---
+description: Use pstack and poteto-mode, and keep personal contact details out of the repo
+alwaysApply: true
+---
+
+Use pstack and /poteto-mode for non-trivial work in this repo. Install pstack from https://github.com/cursor/plugins/tree/main/pstack. Do not copy the plugin into the repo.
+
+Follow the poteto-mode playbook that matches the task.
+
+Per-role models live in `~/.cursor/rules/pstack-models.mdc`, written by /setup-pstack. Use that skill's role labels. If the file is missing, use the pstack skill defaults. Do not invent role names.
+
+Never commit Mike Morse's phone number, home address, or other personal contact details. `npm run privacy` enforces phone-number and street-address patterns. Do not add real contact details as examples or fixtures.
+
+Mike merges every pull request. Do not merge. Do not enable auto-merge. Do not change branch protection. The only repository setting you may change is the GitHub Pages source, and only to GitHub Actions.
+
+`site/index.html` is a placeholder. Do not write resume content unless the task asks for it. Keep asset URLs relative so the project site works at `https://mmorsecode.github.io/resume-site/`.
