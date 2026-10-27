@@ -29,4 +29,4 @@ Preconditions:
 
 - A root server that maps `dist/` to `/` can pass the placeholder text and still hide a broken absolute URL. This feature fails unless the stylesheet URL contains `/resume-site/`.
 - Launch is the only supported way to create that prefix. Do not point drive at a server you started by hand unless `instance.json` records that pid.
-- The public project URL is not a stand-in while Pages is disabled.
+- If `https://mmorsecode.github.io/resume-site/` returns 404, Pages is off. That 404 does not replace the local `/resume-site/` check. When it returns 200, the stylesheet URL on that host must end in `/resume-site/styles.css`.

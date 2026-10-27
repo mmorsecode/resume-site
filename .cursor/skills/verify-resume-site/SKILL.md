@@ -33,11 +33,12 @@ Doctor is read-only. It exits 0 only when all of these are true.
 - `node` reports a version that starts with `v22`.
 - GET of the recorded URL returns 200.
 - The body contains the placeholder sentence.
+- `python3 --version` exits 0. Launch serves the site with `python3 -m http.server`.
 - Chrome exists at `CHROME_PATH`, or at `/usr/bin/google-chrome` when `CHROME_PATH` is unset.
 
 ## Drive
 
-Drive one feature. Chrome must be the binary doctor checked. The helper talks to that Chrome with the DevTools protocol. It does not install a browser package.
+Drive one feature. Chrome must be the binary doctor checked. The helper talks to that Chrome with the DevTools protocol and starts it with `--no-sandbox`. The only page it opens is the local URL. It does not install a browser package.
 
 ```
 node .cursor/skills/verify-resume-site/ctl.mjs drive placeholder-page
@@ -56,7 +57,7 @@ The page has no buttons. Do not send clicks. A failed check exits 1 and still wr
 
 A passing screenshot shows the heading `Mike Morse` and the sentence `This page is a placeholder. The resume is not published yet.` on a white page with dark text.
 
-`https://mmorsecode.github.io/resume-site/` is not proof. On 2026-10-27 that URL returned 404 because GitHub Pages is not enabled. Prove the page on the local URL from `instance.json`.
+`drive` opens the local URL in `instance.json`. Also fetch `https://mmorsecode.github.io/resume-site/` and `https://mmorsecode.github.io/resume-site/styles.css`. After Pages attempt 2 on 2026-10-27, both returned 200 and the bodies matched `site/index.html` and `site/styles.css`. If either URL returns 404, Pages is off. Report that, and still prove the local URL. Do not treat the 404 as a failed heading.
 
 ## Cleanup
 
@@ -70,6 +71,6 @@ Do not kill `python3` by name. Cleanup only signals the pid it started.
 
 ## Helpers
 
-`ctl.mjs` is the helper. The commands in this file are the full interface. It uses Node 22 and Chrome. It does not add a dependency to the site.
+`ctl.mjs` is the helper. The commands in this file are the full interface. It uses Node 22, `python3`, and Chrome. It does not add a dependency to the site.
 
 After the page changes, run `/maintain-verification-skill` so the feature map stays aligned with `site/index.html`.

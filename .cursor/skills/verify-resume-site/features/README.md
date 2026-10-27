@@ -5,6 +5,7 @@ This directory is the source for verifying what a visitor can see. Read this ind
 ## Baseline preconditions
 
 - Node 22 is on `PATH`. The version in `.nvmrc` is `22`.
+- `python3 --version` exits 0.
 - `CHROME_PATH` points at Chrome, or `/usr/bin/google-chrome` exists.
 - `node .cursor/skills/verify-resume-site/ctl.mjs launch` has printed `ready` and written `verify-evidence/instance.json`.
 - `node .cursor/skills/verify-resume-site/ctl.mjs doctor` has printed `doctor ok`.
@@ -24,7 +25,7 @@ This directory is the source for verifying what a visitor can see. Read this ind
 - UI proof is `page.png` plus `result.json` for that feature.
 - Record the feature id in `result.json`.
 - If launch cannot become ready, report the command and the unmet precondition. Do not mark another URL as a substitute.
-- `https://mmorsecode.github.io/resume-site/` returned 404 while Pages is off. That URL does not verify these features.
+- Fetch `https://mmorsecode.github.io/resume-site/` for the published page. After Pages was enabled on Oct 27, 2026, it returned HTTP 200 and matched `site/index.html`. A missing page means Pages is off. Browser steps still use the local URL in `instance.json`.
 
 ## Feature entry contract
 
