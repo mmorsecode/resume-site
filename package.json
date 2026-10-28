@@ -23,7 +23,7 @@
     "@types/node": "^26.6.5",
     "@types/react": "^19.2.2",
     "@types/react-dom": "^19.2.2",
-    "@vitejs/plugin-react": "^5.1.0",
+    "@vitejs/plugin-react": "^6.1.2",
     "html-validate": "^11.17.0",
     "linkinator": "^8.1.0",
     "prettier": "^3.9.10",
