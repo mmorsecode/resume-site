@@ -32,7 +32,7 @@ Mike reviews and merges every pull request. Do not merge. Do not turn on auto-me
 
 You may set the GitHub Pages source to GitHub Actions. Leave every other setting alone.
 
-The `pages` workflow deploys only after CI passes on `main`. Do not make the `deploy` job a required status check. It does not run on pull requests, so a required `deploy` check would wait forever.
+The `pages` workflow deploys only after CI passes on `main`. CI uploads `dist/` on that push. The deploy job downloads the artifact. It does not check out the commit. Do not make the `deploy` job a required status check. It does not run on pull requests, so a required `deploy` check would wait forever.
 
 ## Page content
 

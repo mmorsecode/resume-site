@@ -14,7 +14,7 @@ Check the site with `npm run check`. The command formats nothing. It builds `dis
 
 ## Deploy
 
-A push to `main` runs CI. After CI passes, the `pages` workflow builds `dist/` in an unprivileged job and deploys that directory. A pull request does not deploy.
+A push to `main` runs CI. That run builds `dist/` and uploads it. After CI passes, the `pages` workflow downloads that directory and deploys it. A manual run deploys the latest successful artifact from `main`. The deploy job does not check out the commit and does not install dependencies. A pull request does not deploy.
 
 The Pages source is GitHub Actions. The deploy job is not a required status check.
 
