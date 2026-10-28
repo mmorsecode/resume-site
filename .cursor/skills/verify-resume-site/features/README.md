@@ -1,6 +1,6 @@
 # Resume site verification map
 
-This directory is the source for verifying what a visitor can see. Read this index, then use the feature file as the recipe.
+This directory is the source for verifying what a visitor can see on the built Signal resume. Read this index, then use the feature file as the recipe.
 
 ## Baseline preconditions
 
@@ -14,7 +14,7 @@ This directory is the source for verifying what a visitor can see. Read this ind
 ## Driving conventions
 
 - Start every recipe from the baseline above.
-- The page has one heading, the location line, and one stylesheet link. There are no buttons.
+- The page is the built resume served at `/resume-site/`. There are no buttons.
 - Treat every `ctl.mjs` command as literal.
 - Run the browser through `node .cursor/skills/verify-resume-site/ctl.mjs drive <feature>`.
 - Leave `verify-evidence/<feature>/` in place during cleanup.
@@ -25,7 +25,7 @@ This directory is the source for verifying what a visitor can see. Read this ind
 - UI proof is `page.png` plus `result.json` for that feature.
 - Record the feature id in `result.json`.
 - If launch cannot become ready, report the command and the unmet precondition. Do not mark another URL as a substitute.
-- Fetch `https://mmorsecode.github.io/resume-site/` for the published page. A missing page means Pages is off. Browser steps still use the local URL in `instance.json`. The published page changes only after a merge to `main`.
+- The public page at `https://mmorsecode.github.io/resume-site/` is not the branch build. Do not use it as a passing result.
 
 ## Feature entry contract
 
@@ -38,6 +38,7 @@ Each feature file starts with an H1 and one paragraph, then four H2 sections in 
 
 ## Features
 
-- [Read the resume](./resume-page.md) covers the heading and the location line at the local project URL.
-- [Load the stylesheet](./stylesheet.md) covers the relative `styles.css` link and the computed color, background, font, and deck width.
-- [Open the project path](./project-path.md) covers the same page at `/resume-site/` rather than at the host root.
+- [Read the resume](./resume-page.md) covers the desktop page, its sections, and the applied stylesheet.
+- [Read the resume on a phone](./mobile-layout.md) covers the same page at a mobile width.
+- [Follow the page links](./site-links.md) covers every link and asset under `/resume-site/`.
+- [Check contact privacy](./contact-privacy.md) covers a page with no phone number, email address, or street address, and a passing privacy scan.

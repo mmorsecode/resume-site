@@ -13,18 +13,30 @@ import net from "node:net";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { rules as privacyRules } from "../../../scripts/privacy-rules.mjs";
 
 const skillDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(skillDir, "../../..");
 const evidenceRoot = path.join(repoRoot, "verify-evidence");
 const instancePath = path.join(evidenceRoot, "instance.json");
 const heading = "Michael Morse";
-const sentence = "Framingham, MA";
+const locationLine = "Framingham, MA";
+const signalMark = "Marketing Technology Specialist";
+const sections = [
+  "Summary",
+  "Experience",
+  "Military",
+  "Education",
+  "Skills",
+  "Certifications",
+];
+const emailPattern = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/;
 
-const featureChecks = {
-  "resume-page": ["heading", "sentence", "title"],
-  stylesheet: ["stylesheet", "color", "font", "width"],
-  "project-path": ["project-path", "heading"],
+const viewports = {
+  "resume-page": { width: 1280, height: 800, mobile: false },
+  "mobile-layout": { width: 390, height: 844, mobile: true },
+  "site-links": { width: 1280, height: 800, mobile: false },
+  "contact-privacy": { width: 1280, height: 800, mobile: false },
 };
 
 function chromePath() {
@@ -102,7 +114,9 @@ async function waitForReady(url) {
       if (
         response.status === 200 &&
         body.includes(heading) &&
-        body.includes(sentence)
+        body.includes(locationLine) &&
+        body.includes(signalMark) &&
+        body.includes('id="root"')
       ) {
         return;
       }
@@ -186,6 +200,15 @@ async function launch() {
   process.stdout.write(`ready ${url}\n`);
 }
 
+async function serverCommand(pid) {
+  try {
+    const raw = await readFile(`/proc/${pid}/cmdline`);
+    return raw.toString("utf8").replaceAll("\0", " ").trim();
+  } catch {
+    return "";
+  }
+}
+
 async function doctor() {
   const instance = await readInstance();
   if (!instance) {
@@ -194,6 +217,15 @@ async function doctor() {
   }
   if (!pidAlive(instance.pid)) {
     fail(`pid ${instance.pid} is not running`);
+    return;
+  }
+  const command = await serverCommand(instance.pid);
+  if (!command.includes("python3") || !command.includes("http.server")) {
+    fail(`pid ${instance.pid} is not the python3 http.server this run started`);
+    return;
+  }
+  if (!String(command).includes(String(instance.port))) {
+    fail(`pid ${instance.pid} is not listening with port ${instance.port}`);
     return;
   }
   if (!process.version.startsWith("v22.")) {
@@ -219,64 +251,68 @@ async function doctor() {
     fail(`${instance.url} returned ${response.status}`);
     return;
   }
-  if (!body.includes(sentence)) {
-    fail("response body is missing the location line");
+  if (!body.includes(locationLine) || !body.includes(signalMark)) {
+    fail("response body is not the built Signal resume");
+    return;
+  }
+  if (!body.includes('id="root"')) {
+    fail("response body is missing the built resume root");
     return;
   }
   process.stdout.write(`doctor ok ${instance.url}\n`);
 }
 
-function unmet(feature, snapshot) {
-  const { observed } = snapshot;
-  const problems = [];
-  const checks = featureChecks[feature];
-  if (checks.includes("heading") && observed.h1 !== heading) {
-    problems.push(`heading ${JSON.stringify(observed.h1)}`);
+function pageOrigin(pageUrl) {
+  return new URL(pageUrl).origin;
+}
+
+function sameOriginPath(pageUrl, resourceUrl) {
+  const page = new URL(pageUrl);
+  const resource = new URL(resourceUrl);
+  if (resource.origin !== page.origin) {
+    return null;
   }
-  if (checks.includes("sentence") && observed.paragraph !== sentence) {
-    problems.push(`paragraph ${JSON.stringify(observed.paragraph)}`);
-  }
-  if (checks.includes("title") && observed.title !== heading) {
-    problems.push(`title ${JSON.stringify(observed.title)}`);
-  }
-  if (checks.includes("stylesheet")) {
-    if (observed.stylesheetHref !== "styles.css") {
-      problems.push(`href ${JSON.stringify(observed.stylesheetHref)}`);
+  return resource.pathname;
+}
+
+function cssUrls(css, base) {
+  const found = [];
+  const pattern = /url\(\s*(['"]?)([^'")]+)\1\s*\)/g;
+  let match = pattern.exec(css);
+  while (match !== null) {
+    const raw = match[2].trim();
+    if (!raw.startsWith("data:")) {
+      found.push({ raw, url: new URL(raw, base).href });
     }
-    if (snapshot.stylesheetStatus !== 200) {
-      problems.push(`stylesheet status ${snapshot.stylesheetStatus}`);
-    }
+    match = pattern.exec(css);
   }
-  if (checks.includes("color")) {
-    if (observed.color !== "rgb(231, 238, 246)") {
-      problems.push(`color ${observed.color}`);
-    }
-    if (observed.background !== "rgb(12, 18, 28)") {
-      problems.push(`background ${observed.background}`);
-    }
-  }
-  if (checks.includes("font") && !observed.fontFamily.includes("Inter")) {
-    problems.push(`font ${observed.fontFamily}`);
-  }
-  if (checks.includes("width") && observed.maxWidth === "none") {
-    problems.push("max-width is none");
-  }
-  if (checks.includes("project-path")) {
-    const pathname = new URL(observed.pageUrl).pathname;
-    if (
-      pathname !== "/resume-site/" &&
-      pathname !== "/resume-site/index.html"
-    ) {
-      problems.push(`pathname ${pathname}`);
-    }
-    if (!observed.stylesheetAbsolute?.endsWith("/resume-site/styles.css")) {
-      problems.push(`stylesheet url ${observed.stylesheetAbsolute}`);
+  return found;
+}
+
+function privacyFindings(text) {
+  const findings = [];
+  for (const rule of privacyRules) {
+    rule.pattern.lastIndex = 0;
+    if (rule.pattern.test(text)) {
+      findings.push(rule.id);
     }
   }
-  if (snapshot.navigationStatus !== 200) {
-    problems.push(`navigation ${snapshot.navigationStatus}`);
+  if (emailPattern.test(text)) {
+    findings.push("email-address");
   }
-  return problems;
+  return findings;
+}
+
+async function fetchStatus(url) {
+  try {
+    const response = await fetch(url, {
+      redirect: "follow",
+      signal: AbortSignal.timeout(20000),
+    });
+    return response.status;
+  } catch (error) {
+    return error.name === "TimeoutError" ? 0 : 0;
+  }
 }
 
 function sendCommand(socket, pending, method, params = {}, sessionId) {
@@ -307,7 +343,67 @@ async function removeDir(dir) {
   await rm(dir, { recursive: true, force: true });
 }
 
-async function capturePage(url, chromeBin, screenshot) {
+const observeExpression = `(() => {
+  const referenced = [];
+  for (const el of document.querySelectorAll("[href], [src]")) {
+    const attr = el.hasAttribute("href") ? "href" : "src";
+    referenced.push({
+      tag: el.tagName.toLowerCase(),
+      raw: el.getAttribute(attr),
+      url: el[attr] || null,
+    });
+  }
+  const h1 = document.querySelector("h1");
+  const page = document.querySelector(".page");
+  const deck = document.querySelector(".deck");
+  const deckMore = document.querySelector(".deck-more");
+  const headshot = document.querySelector(".portrait img");
+  const contact = document.querySelector(".contact");
+  const link = document.querySelector('link[rel="stylesheet"]');
+  const root = getComputedStyle(document.documentElement);
+  const description =
+    document.querySelector('meta[name="description"]')?.content ?? "";
+  return {
+    title: document.title,
+    h1: h1?.textContent ?? null,
+    h1FontSize: h1 ? getComputedStyle(h1).fontSize : null,
+    location: document.querySelector(".copy .label")?.textContent ?? null,
+    sections: [...document.querySelectorAll("h2")].map((node) =>
+      node.textContent.trim(),
+    ),
+    signalMark: document.body.innerText.includes(${JSON.stringify(signalMark)}),
+    stylesheetHref: link?.getAttribute("href") ?? null,
+    stylesheetAbsolute: link?.href ?? null,
+    color: root.color,
+    background: root.backgroundColor,
+    fontFamily: getComputedStyle(document.body).fontFamily,
+    maxWidth: deck ? getComputedStyle(deck).maxWidth : null,
+    pageUrl: location.href,
+    innerWidth: window.innerWidth,
+    innerHeight: window.innerHeight,
+    gridTracks: page
+      ? getComputedStyle(page).gridTemplateColumns.split(/\\s+/).filter(Boolean)
+          .length
+      : 0,
+    deckMoreDisplay: deckMore ? getComputedStyle(deckMore).display : null,
+    headshot: headshot
+      ? {
+          alt: headshot.alt,
+          src: headshot.currentSrc || headshot.src,
+          naturalWidth: headshot.naturalWidth,
+        }
+      : null,
+    contact: contact
+      ? { tag: contact.tagName, text: contact.textContent.trim() }
+      : null,
+    visibleText: [document.body.innerText, document.title, description].join(
+      "\\n",
+    ),
+    referenced,
+  };
+})()`;
+
+async function capturePage(url, chromeBin, screenshot, viewport) {
   const userData = await mkdtemp(path.join(tmpdir(), "verify-chrome-"));
   const chrome = spawn(
     chromeBin,
@@ -317,7 +413,7 @@ async function capturePage(url, chromeBin, screenshot) {
       "--disable-dev-shm-usage",
       `--user-data-dir=${userData}`,
       "--remote-debugging-port=0",
-      "--window-size=1280,800",
+      `--window-size=${viewport.width},${viewport.height}`,
     ],
     { stdio: ["ignore", "ignore", "pipe"] },
   );
@@ -399,6 +495,18 @@ async function capturePage(url, chromeBin, screenshot) {
     await sendCommand(socket, pending, "Page.enable", {}, sessionId);
     await sendCommand(socket, pending, "Network.enable", {}, sessionId);
     await sendCommand(socket, pending, "Runtime.enable", {}, sessionId);
+    await sendCommand(
+      socket,
+      pending,
+      "Emulation.setDeviceMetricsOverride",
+      {
+        width: viewport.width,
+        height: viewport.height,
+        deviceScaleFactor: 1,
+        mobile: viewport.mobile,
+      },
+      sessionId,
+    );
     const loaded = new Promise((resolve, reject) => {
       const timer = setTimeout(
         () => reject(new Error(`load timed out for ${url}`)),
@@ -411,30 +519,22 @@ async function capturePage(url, chromeBin, screenshot) {
     });
     await sendCommand(socket, pending, "Page.navigate", { url }, sessionId);
     await loaded;
-    const evaluated = await sendCommand(
+    await sendCommand(
       socket,
       pending,
       "Runtime.evaluate",
       {
-        expression: `(() => {
-          const link = document.querySelector('link[rel="stylesheet"]');
-          const root = getComputedStyle(document.documentElement);
-          const body = getComputedStyle(document.body);
-          return {
-            title: document.title,
-            h1: document.querySelector("h1")?.textContent ?? null,
-            paragraph: document.querySelector("main p")?.textContent ?? null,
-            stylesheetHref: link?.getAttribute("href") ?? null,
-            stylesheetAbsolute: link?.href ?? null,
-            color: root.color,
-            background: root.backgroundColor,
-            fontFamily: body.fontFamily,
-            maxWidth: getComputedStyle(document.querySelector(".deck")).maxWidth,
-            pageUrl: location.href,
-          };
-        })()`,
-        returnByValue: true,
+        expression: "document.fonts.ready.then(() => true)",
+        awaitPromise: true,
       },
+      sessionId,
+    );
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    const evaluated = await sendCommand(
+      socket,
+      pending,
+      "Runtime.evaluate",
+      { expression: observeExpression, returnByValue: true },
       sessionId,
     );
     const shot = await sendCommand(
@@ -459,6 +559,12 @@ async function capturePage(url, chromeBin, screenshot) {
       observed: evaluated.result.value,
       stylesheetStatus: stylesheet?.response?.status ?? null,
       stylesheetUrl: stylesheet?.response?.url ?? null,
+      network: network.map((item) => ({
+        url: item.response?.url ?? null,
+        status: item.response?.status ?? null,
+        type: item.type ?? null,
+        initiatorType: item.initiator?.type ?? null,
+      })),
     };
   } finally {
     if (pidAlive(chrome.pid)) {
@@ -475,9 +581,244 @@ async function capturePage(url, chromeBin, screenshot) {
   }
 }
 
+async function linkReport(snapshot) {
+  const { observed } = snapshot;
+  const pageUrl = observed.pageUrl;
+  const resources = observed.referenced.map((item) => ({
+    kind: "document",
+    tag: item.tag,
+    raw: item.raw,
+    url: item.url,
+  }));
+  if (observed.stylesheetAbsolute) {
+    const cssResponse = await fetch(observed.stylesheetAbsolute);
+    const css = await cssResponse.text();
+    for (const item of cssUrls(css, observed.stylesheetAbsolute)) {
+      resources.push({
+        kind: "stylesheet",
+        tag: "css",
+        raw: item.raw,
+        url: item.url,
+      });
+    }
+  }
+  const browserStatus = new Map();
+  for (const item of snapshot.network) {
+    if (item.url) {
+      browserStatus.set(item.url, item.status);
+    }
+  }
+  const checked = [];
+  for (const resource of resources) {
+    const fromBrowser = browserStatus.get(resource.url);
+    const status =
+      typeof fromBrowser === "number"
+        ? fromBrowser
+        : await fetchStatus(resource.url);
+    checked.push({
+      ...resource,
+      status,
+      via: typeof fromBrowser === "number" ? "browser" : "fetch",
+    });
+  }
+  return checked;
+}
+
+function requireResource(problems, links, predicate, label) {
+  const match = links.find(predicate);
+  if (!match) {
+    problems.push(`missing ${label}`);
+    return;
+  }
+  if (match.status < 200 || match.status >= 300) {
+    problems.push(`${label} status ${match.status}`);
+  }
+}
+
+function unmet(feature, snapshot, links, privacy) {
+  const { observed } = snapshot;
+  const problems = [];
+  const viewport = viewports[feature];
+  if (!observed) {
+    problems.push("page observation missing");
+    return problems;
+  }
+  if (snapshot.navigationStatus !== 200) {
+    problems.push(`navigation ${snapshot.navigationStatus}`);
+  }
+  const pathname = observed.pageUrl ? new URL(observed.pageUrl).pathname : "";
+  if (pathname !== "/resume-site/" && pathname !== "/resume-site/index.html") {
+    problems.push(`pathname ${pathname}`);
+  }
+  if (observed.h1 !== heading) {
+    problems.push(`heading ${JSON.stringify(observed.h1)}`);
+  }
+  if (observed.title !== heading) {
+    problems.push(`title ${JSON.stringify(observed.title)}`);
+  }
+  if (observed.location !== locationLine) {
+    problems.push(`location ${JSON.stringify(observed.location)}`);
+  }
+  if (observed.innerWidth !== viewport.width) {
+    problems.push(`innerWidth ${observed.innerWidth}`);
+  }
+
+  if (feature === "resume-page") {
+    if (!observed.signalMark) {
+      problems.push("signal resume text missing");
+    }
+    const found = observed.sections ?? [];
+    for (const section of sections) {
+      if (!found.includes(section)) {
+        problems.push(`section ${section}`);
+      }
+    }
+    if (observed.stylesheetHref !== "styles.css") {
+      problems.push(`href ${JSON.stringify(observed.stylesheetHref)}`);
+    }
+    if (snapshot.stylesheetStatus !== 200) {
+      problems.push(`stylesheet status ${snapshot.stylesheetStatus}`);
+    }
+    if (observed.color !== "rgb(231, 238, 246)") {
+      problems.push(`color ${observed.color}`);
+    }
+    if (observed.background !== "rgb(12, 18, 28)") {
+      problems.push(`background ${observed.background}`);
+    }
+    if (!observed.fontFamily?.includes("Inter")) {
+      problems.push(`font ${observed.fontFamily}`);
+    }
+    if (observed.maxWidth === "none" || observed.maxWidth == null) {
+      problems.push("max-width is none");
+    }
+    if (observed.h1FontSize !== "64px") {
+      problems.push(`h1 size ${observed.h1FontSize}`);
+    }
+    if (observed.gridTracks !== 2) {
+      problems.push(`grid tracks ${observed.gridTracks}`);
+    }
+    if (observed.deckMoreDisplay === "none") {
+      problems.push("deck continuation is hidden at desktop width");
+    }
+    if (!observed.headshot || observed.headshot.naturalWidth < 1) {
+      problems.push("headshot did not load");
+    } else {
+      const headshotPath = sameOriginPath(
+        observed.pageUrl,
+        observed.headshot.src,
+      );
+      if (headshotPath !== "/resume-site/headshot.jpg") {
+        problems.push(`headshot ${observed.headshot.src}`);
+      }
+    }
+  }
+
+  if (feature === "mobile-layout") {
+    if (!observed.signalMark) {
+      problems.push("signal resume text missing");
+    }
+    if (observed.h1FontSize !== "36px") {
+      problems.push(`h1 size ${observed.h1FontSize}`);
+    }
+    if (observed.gridTracks !== 1) {
+      problems.push(`grid tracks ${observed.gridTracks}`);
+    }
+    if (observed.deckMoreDisplay !== "none") {
+      problems.push(`deck continuation display ${observed.deckMoreDisplay}`);
+    }
+  }
+
+  if (feature === "site-links") {
+    if (!observed.stylesheetAbsolute?.endsWith("/resume-site/styles.css")) {
+      problems.push(`stylesheet url ${observed.stylesheetAbsolute}`);
+    }
+    for (const link of links) {
+      if (link.raw?.startsWith("/") || link.raw?.startsWith("//")) {
+        problems.push(`root-absolute ${link.raw}`);
+      }
+      const resourcePath = sameOriginPath(observed.pageUrl, link.url);
+      if (resourcePath && !resourcePath.startsWith("/resume-site/")) {
+        problems.push(`outside project path ${link.url}`);
+      }
+      if (link.status < 200 || link.status >= 300) {
+        problems.push(`${link.url} status ${link.status}`);
+      }
+    }
+    requireResource(
+      problems,
+      links,
+      (link) => link.url === "https://github.com/mmorsecode",
+      "github profile",
+    );
+    requireResource(
+      problems,
+      links,
+      (link) => link.url?.endsWith("/resume-site/styles.css"),
+      "stylesheet",
+    );
+    requireResource(
+      problems,
+      links,
+      (link) => link.url?.endsWith("/resume-site/headshot.jpg"),
+      "headshot",
+    );
+    requireResource(
+      problems,
+      links,
+      (link) => link.url?.endsWith("/resume-site/favicon.ico"),
+      "favicon",
+    );
+    const pageInitiated = (snapshot.network ?? []).filter((item) => {
+      if (!item.url || !observed.pageUrl) {
+        return false;
+      }
+      const resourcePath = sameOriginPath(observed.pageUrl, item.url);
+      if (!resourcePath || resourcePath.startsWith("/resume-site/")) {
+        return false;
+      }
+      const fromPage =
+        item.initiatorType === "parser" || item.initiatorType === "stylesheet";
+      return (
+        fromPage &&
+        ["Document", "Stylesheet", "Image", "Font", "Script"].includes(
+          item.type,
+        )
+      );
+    });
+    for (const item of pageInitiated) {
+      problems.push(`browser loaded ${item.url}`);
+    }
+  }
+
+  if (feature === "contact-privacy") {
+    if (privacy?.status !== 0) {
+      problems.push(`privacy scan status ${privacy?.status}`);
+    }
+    for (const finding of privacy?.findings ?? []) {
+      problems.push(`visible ${finding}`);
+    }
+    if (privacy?.mailto) {
+      problems.push("mailto link");
+    }
+    if (privacy?.tel) {
+      problems.push("tel link");
+    }
+    if (
+      observed.contact?.tag !== "SPAN" ||
+      observed.contact?.text !== "Contact"
+    ) {
+      problems.push(`contact ${JSON.stringify(observed.contact)}`);
+    }
+  }
+
+  return problems;
+}
+
 async function drive(feature) {
-  if (!Object.hasOwn(featureChecks, feature)) {
-    fail(`unknown feature ${feature}`);
+  if (!Object.hasOwn(viewports, feature)) {
+    fail(
+      `unknown feature ${feature}. expected ${Object.keys(viewports).join(", ")}`,
+    );
     return;
   }
   const instance = await readInstance();
@@ -489,25 +830,67 @@ async function drive(feature) {
   const featureDir = path.join(evidenceRoot, feature);
   await mkdir(featureDir, { recursive: true });
   const screenshot = path.join(featureDir, "page.png");
-  const captured = await capturePage(
-    instance.url,
-    instance.chromePath || chromePath(),
-    screenshot,
-  );
+  const resultPath = path.join(featureDir, "result.json");
+  let captured;
+  try {
+    captured = await capturePage(
+      instance.url,
+      instance.chromePath || chromePath(),
+      screenshot,
+      viewports[feature],
+    );
+  } catch (error) {
+    const snapshot = {
+      feature,
+      url: instance.url,
+      viewport: viewports[feature],
+      screenshot,
+      problems: [error.message],
+    };
+    await writeFile(resultPath, `${JSON.stringify(snapshot, null, 2)}\n`);
+    fail(error.message);
+    return;
+  }
+
+  let links = [];
+  if (feature === "site-links") {
+    links = await linkReport(captured);
+  }
+  let privacy = null;
+  if (feature === "contact-privacy") {
+    const scanned = spawnSync("npm", ["run", "privacy"], {
+      cwd: repoRoot,
+      encoding: "utf8",
+    });
+    const visible = captured.observed?.visibleText ?? "";
+    const raw = (captured.observed?.referenced ?? [])
+      .map((item) => item.raw ?? "")
+      .join("\n");
+    privacy = {
+      status: scanned.status,
+      findings: privacyFindings(visible),
+      mailto: /mailto:/i.test(raw),
+      tel: /\btel:/i.test(raw),
+    };
+  }
+
   const snapshot = {
     feature,
     url: instance.url,
+    viewport: viewports[feature],
     screenshot,
-    ...captured,
+    navigationStatus: captured.navigationStatus,
+    stylesheetStatus: captured.stylesheetStatus,
+    stylesheetUrl: captured.stylesheetUrl,
+    observed: { ...captured.observed, visibleText: undefined },
+    links,
+    privacy,
+    network: captured.network,
   };
-  const problems = unmet(feature, snapshot);
-  snapshot.problems = problems;
-  await writeFile(
-    path.join(featureDir, "result.json"),
-    `${JSON.stringify(snapshot, null, 2)}\n`,
-  );
-  if (problems.length > 0) {
-    fail(problems.join("; "));
+  snapshot.problems = unmet(feature, captured, links, privacy);
+  await writeFile(resultPath, `${JSON.stringify(snapshot, null, 2)}\n`);
+  if (snapshot.problems.length > 0) {
+    fail(snapshot.problems.join("; "));
     return;
   }
   process.stdout.write(`drive ${feature} ok ${screenshot}\n`);
