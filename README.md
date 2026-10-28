@@ -1,6 +1,6 @@
 # resume-site
 
-Michael Morse's personal resume website. The published page is a placeholder until the resume is ready.
+Michael Morse's resume. The published page is a project site at `https://mmorsecode.github.io/resume-site/`.
 
 ## Build the site
 
@@ -8,21 +8,19 @@ You need Node 22. The version is in `.nvmrc`.
 
 Install dependencies with `npm ci`.
 
-Build the site with `npm run build`. The command copies `site/` to `dist/`.
+Build the site with `npm run build`. Vite writes `dist/` with the base path `/resume-site/`. Asset URLs in that build are relative, so they resolve under the project path.
 
-Check the site with `npm run check`. The command checks format, HTML, links, privacy, and tests.
+Check the site with `npm run check`. The command formats nothing. It builds `dist/`, then checks format, HTML, links, privacy, and tests.
 
 ## Deploy
 
-A push to `main` runs the `pages` workflow. The workflow builds `dist/` and deploys that directory to GitHub Pages. A pull request does not deploy.
+A push to `main` runs CI. That run builds `dist/` and uploads it. After CI passes, the `pages` workflow downloads that directory and deploys it. A manual run deploys the latest successful artifact from `main`. The deploy job does not check out the commit and does not install dependencies. A pull request does not deploy.
 
-The site is a project site. Keep asset URLs relative so they work at `https://mmorsecode.github.io/resume-site/`. The placeholder links `styles.css` that way.
-
-Set the Pages source to GitHub Actions under Settings, then Pages, then Source.
+The Pages source is GitHub Actions. The deploy job is not a required status check.
 
 ## Privacy
 
-Do not commit Mike's phone number, home address, or other personal contact details. Do not invent contact details for the site.
+Do not commit Mike's phone number, home address, or other personal contact details. Do not invent contact details for the site. The public page shows Framingham, MA and the GitHub profile. It has no email address and no phone number.
 
 `npm run privacy` fails if a tracked file contains a phone number or a street address.
 

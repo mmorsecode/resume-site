@@ -1,34 +1,57 @@
 name: pages
 on:
-  push:
-    branches:
-      - main
+  workflow_run:
+    workflows: ["CI"]
+    types:
+      - completed
   workflow_dispatch:
 permissions:
   contents: read
-  pages: write
-  id-token: write
 concurrency:
   group: pages
   cancel-in-progress: false
 jobs:
   deploy:
     name: deploy
-    if: github.ref == 'refs/heads/main'
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_branch == 'main' &&
+       github.event.workflow_run.event == 'push')
     runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-node@v6
+      - name: Resolve CI run
+        id: ci
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          id="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow CI --branch main --event push --status success --limit 1 --json databaseId --jq '.[0].databaseId')"
+          test -n "$id"
+          echo "id=$id" >> "$GITHUB_OUTPUT"
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        if: github.event_name == 'workflow_run'
         with:
-          node-version-file: .nvmrc
-          cache: npm
-      - run: npm ci
-      - run: npm run build
-      - uses: actions/upload-pages-artifact@v4
+          name: pages-dist
+          path: dist
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        if: github.event_name == 'workflow_dispatch'
+        with:
+          name: pages-dist
+          path: dist
+          run-id: ${{ steps.ci.outputs.id }}
+          github-token: ${{ github.token }}
+      - uses: actions/upload-pages-artifact@7b1f4a764d45c48632c6b24a0339c27f5614fb0b # v4
         with:
           path: dist
-      - uses: actions/deploy-pages@v5
+      - uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5
         id: deployment

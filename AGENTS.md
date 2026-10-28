@@ -16,9 +16,9 @@ You need Node 22. The version is in `.nvmrc`.
 
 Install dependencies with `npm ci`.
 
-Run `npm run check` before you open a pull request. The command checks format, HTML, links, privacy, and tests. It does not write the site.
+Run `npm run check` before you open a pull request. The command builds `dist/`, then checks format, HTML, links, privacy, and tests.
 
-Run `npm run build` to copy `site/` to `dist/`.
+Run `npm run build` to write the Vite build to `dist/`. The Vite base path is `/resume-site/`.
 
 ## Privacy
 
@@ -32,10 +32,8 @@ Mike reviews and merges every pull request. Do not merge. Do not turn on auto-me
 
 You may set the GitHub Pages source to GitHub Actions. Leave every other setting alone.
 
-The `pages` workflow deploys only from `main`. Do not make the `deploy` job a required status check. It does not run on pull requests, so a required `deploy` check would wait forever.
+The `pages` workflow deploys only after CI passes on `main`. CI uploads `dist/` on that push. The deploy job downloads the artifact. It does not check out the commit. Do not make the `deploy` job a required status check. It does not run on pull requests, so a required `deploy` check would wait forever.
 
 ## Page content
 
-`site/index.html` is a placeholder. Do not add resume content unless the task asks for the resume.
-
-Keep asset URLs relative. The published site is a project site at `https://mmorsecode.github.io/resume-site/`.
+The page is the public resume. Do not add a phone number, an email address, or a street address. Keep asset URLs relative. The published site is a project site at `https://mmorsecode.github.io/resume-site/`.

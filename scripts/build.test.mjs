@@ -7,32 +7,34 @@ import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
-async function assertDistMatchesSite() {
-  const siteHtml = await readFile(path.join(root, "site/index.html"));
-  const siteCss = await readFile(path.join(root, "site/styles.css"));
-  const distHtml = await readFile(path.join(root, "dist/index.html"));
-  const distCss = await readFile(path.join(root, "dist/styles.css"));
-  assert.deepEqual(distHtml, siteHtml);
-  assert.deepEqual(distCss, siteCss);
-}
-
 function runBuild() {
-  return spawnSync(process.execPath, [path.join(root, "scripts/build.mjs")], {
+  return spawnSync("npm", ["run", "build"], {
     cwd: root,
     encoding: "utf8",
   });
 }
 
-test("build copies site bytes and can run twice", async () => {
-  const first = runBuild();
-  assert.equal(first.status, 0, first.stderr);
-  await assertDistMatchesSite();
-  await assert.rejects(access(path.join(root, "dist.tmp")));
-  await assert.rejects(access(path.join(root, "dist.previous")));
+test("production build emits the resume with relative assets", async () => {
+  const built = runBuild();
+  assert.equal(built.status, 0, `${built.stdout}\n${built.stderr}`);
 
-  const second = runBuild();
-  assert.equal(second.status, 0, second.stderr);
-  await assertDistMatchesSite();
-  await assert.rejects(access(path.join(root, "dist.tmp")));
-  await assert.rejects(access(path.join(root, "dist.previous")));
+  const html = await readFile(path.join(root, "dist/index.html"), "utf8");
+  assert.match(html, /Michael Morse/);
+  assert.match(html, /Framingham, MA/);
+  assert.match(html, /https:\/\/github\.com\/mmorsecode/);
+  assert.match(html, /headshot\.jpg/);
+  assert.doesNotMatch(html, /mailto:/);
+  assert.doesNotMatch(html, /href\s*=\s*["']\//);
+  assert.doesNotMatch(html, /src\s*=\s*["']\//);
+  assert.equal(html.includes("Aerospace Ground Equipment"), false);
+  assert.match(html, /<link rel="icon" href="favicon\.ico" \/>/);
+  await access(path.join(root, "dist/headshot.jpg"));
+  await access(path.join(root, "dist/styles.css"));
+  await access(path.join(root, "dist/favicon.ico"));
+
+  const config = await readFile(path.join(root, "vite.config.ts"), "utf8");
+  assert.match(config, /base:\s*"\/resume-site\/"/);
+
+  const again = runBuild();
+  assert.equal(again.status, 0, `${again.stdout}\n${again.stderr}`);
 });
