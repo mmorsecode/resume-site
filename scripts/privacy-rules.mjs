@@ -1,11 +1,4 @@
-const capitalizedWord = "[A-Z][A-Za-z0-9.'-]*";
-const suffix =
-  "Street|St|Avenue|Ave|Road|Rd|Boulevard|Blvd|Drive|Dr|Lane|Ln|Court|Ct|Place|Pl|Way|Terrace|Ter";
 const phoneSep = "[-.\\s\\u2011]";
-
-function street(source) {
-  return new RegExp(source, "g");
-}
 
 export const rules = [
   {
@@ -39,21 +32,18 @@ export const rules = [
   },
   {
     id: "street-address",
-    pattern: street(
-      `\\b\\d{1,6}\\s+(?:${capitalizedWord}\\s+){1,5}(?:${suffix})\\b\\.?(?!\\s+[a-z])`,
-    ),
+    pattern:
+      /\b\d{1,6}\s+(?:[A-Z][A-Za-z0-9.'-]*\s+){1,5}(?:Street|St|Avenue|Ave|Road|Rd|Boulevard|Blvd|Drive|Dr|Lane|Ln|Court|Ct|Place|Pl|Way|Terrace|Ter)\b\.?(?!\s+[a-z])/g,
   },
   {
     id: "street-address",
-    pattern: street(
-      `\\b\\d{1,6}(?:st|nd|rd|th)\\s+(?:${capitalizedWord}\\s+){0,4}(?:${suffix})\\b\\.?(?!\\s+[a-z])`,
-    ),
+    pattern:
+      /\b\d{1,6}(?:st|nd|rd|th)\s+(?:[A-Z][A-Za-z0-9.'-]*\s+){0,4}(?:Street|St|Avenue|Ave|Road|Rd|Boulevard|Blvd|Drive|Dr|Lane|Ln|Court|Ct|Place|Pl|Way|Terrace|Ter)\b\.?(?!\s+[a-z])/g,
   },
   {
     id: "street-address",
-    pattern: street(
-      "\\b\\d{1,6}\\s+(?:[a-z][a-z0-9.'-]*\\s+){1,5}(?:street|avenue|road|boulevard|drive|lane|court|place|terrace)\\b\\.?(?!\\s+[a-z])",
-    ),
+    pattern:
+      /\b\d{1,6}\s+(?:[a-z][a-z0-9.'-]*\s+){1,5}(?:street|avenue|road|boulevard|drive|lane|court|place|terrace)\b\.?(?!\s+[a-z])/g,
   },
   {
     id: "street-address",
