@@ -96,3 +96,10 @@ jobs:
           echo "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb  ${archive}" | sha256sum -c
           tar -xzf "$archive" gitleaks
           ./gitleaks detect --source . --redact --verbose --exit-code 1
+  semgrep:
+    name: semgrep
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - run: pipx install semgrep
+      - run: semgrep --config p/default --error
