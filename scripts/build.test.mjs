@@ -27,8 +27,10 @@ test("production build emits the resume with relative assets", async () => {
   assert.doesNotMatch(html, /href\s*=\s*["']\//);
   assert.doesNotMatch(html, /src\s*=\s*["']\//);
   assert.equal(html.includes("Aerospace Ground Equipment"), false);
+  assert.match(html, /<link rel="icon" href="favicon\.ico" \/>/);
   await access(path.join(root, "dist/headshot.jpg"));
   await access(path.join(root, "dist/styles.css"));
+  await access(path.join(root, "dist/favicon.ico"));
 
   const config = await readFile(path.join(root, "vite.config.ts"), "utf8");
   assert.match(config, /base:\s*"\/resume-site\/"/);
