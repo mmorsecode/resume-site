@@ -428,9 +428,23 @@ async function fetchResource(url, guard, origin) {
     }
   }
   if (isParserAssertion(lastError) || isPreviewUrl(url, origin)) {
-    throw new Error(`GET ${url} failed: ${errorDetail(lastError)}`);
+    const failure = new Error(`GET ${url} failed: ${errorDetail(lastError)}`);
+    failure.infra = true;
+    throw failure;
   }
   return { status: 0, body: Buffer.alloc(0) };
+}
+
+function isPreviewBrowserFailure(error) {
+  if (error?.code === "ENOENT" || error?.code === "EACCES") {
+    return true;
+  }
+  const message = error instanceof Error ? error.message : String(error);
+  return (
+    message === "chrome exited before opening a debug port" ||
+    message === "chrome did not open a debug port" ||
+    message.startsWith("load timed out for ")
+  );
 }
 
 function sendCommand(socket, pending, method, params = {}, sessionId) {
@@ -783,14 +797,13 @@ async function linkReport(snapshot) {
     }
     const trailing = guard.take();
     if (trailing) {
-      throw new Error(`site-links fetch failed: ${errorDetail(trailing)}`);
+      const failure = new Error(
+        `site-links fetch failed: ${errorDetail(trailing)}`,
+      );
+      failure.infra = true;
+      throw failure;
     }
     return checked;
-  } catch (error) {
-    if (error && typeof error === "object") {
-      error.partialLinks = checked;
-    }
-    throw error;
   } finally {
     guard.stop();
   }
@@ -1012,20 +1025,25 @@ async function drive(feature) {
       viewports[feature],
     );
   } catch (error) {
+    const previewBrowserFailure =
+      feature === "site-links" && isPreviewBrowserFailure(error);
+    if (feature === "site-links" && !previewBrowserFailure) {
+      throw error;
+    }
     const snapshot = {
       feature,
       url: instance.url,
       viewport: viewports[feature],
       screenshot,
-      problems: feature === "site-links" ? [] : [error.message],
+      problems: previewBrowserFailure ? [] : [error.message],
     };
     // Chrome launch and page-load failures exit 3 only for site-links.
     // resume-page, mobile-layout, and contact-privacy still exit 1.
-    if (feature === "site-links") {
+    if (previewBrowserFailure) {
       snapshot.infra_error = errorDetail(error);
     }
     await writeFile(resultPath, `${JSON.stringify(snapshot, null, 2)}\n`);
-    if (feature === "site-links") {
+    if (previewBrowserFailure) {
       process.stderr.write(`${snapshot.infra_error}\n`);
       process.exitCode = 3;
       return;
@@ -1040,10 +1058,10 @@ async function drive(feature) {
     try {
       links = await linkReport(captured);
     } catch (error) {
-      infraError = errorDetail(error);
-      if (Array.isArray(error?.partialLinks)) {
-        links = error.partialLinks;
+      if (!error?.infra) {
+        throw error;
       }
+      infraError = errorDetail(error);
     }
   }
   let privacy = null;
