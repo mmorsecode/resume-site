@@ -948,9 +948,17 @@ async function drive(feature) {
       url: instance.url,
       viewport: viewports[feature],
       screenshot,
-      problems: [error.message],
+      problems: feature === "site-links" ? [] : [error.message],
     };
+    if (feature === "site-links") {
+      snapshot.infra_error = errorDetail(error);
+    }
     await writeFile(resultPath, `${JSON.stringify(snapshot, null, 2)}\n`);
+    if (feature === "site-links") {
+      process.stderr.write(`${snapshot.infra_error}\n`);
+      process.exitCode = 3;
+      return;
+    }
     fail(error.message);
     return;
   }
