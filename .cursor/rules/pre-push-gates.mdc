@@ -1,0 +1,6 @@
+---
+description: Run the CI scanners before every push
+alwaysApply: true
+---
+
+Before any push, run exactly the CI scanners, `semgrep scan --config p/default --error` and gitleaks, and do not push if either exits non-zero.
