@@ -3,4 +3,14 @@ description: Run the CI scanners before every push
 alwaysApply: true
 ---
 
-Before any push, run exactly the CI scanners, `semgrep scan --config p/default --error` and gitleaks, and do not push if either exits non-zero.
+Before any push, run the CI scanners and do not push if either exits non-zero.
+
+Semgrep, copied from `.github/workflows/ci.yml`:
+
+`semgrep --config p/default --error --metrics=off`
+
+Gitleaks, copied from `.github/workflows/ci.yml`:
+
+`./gitleaks detect --source . --redact --verbose --exit-code 1`
+
+`npm run check` runs that Semgrep command. Semgrep is not installed by `npm ci`. Install it with `pipx install semgrep`, the same install step as the semgrep job. If `semgrep` is not on `PATH`, `npm run check` exits and prints that install step.
