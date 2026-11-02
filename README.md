@@ -10,7 +10,7 @@ Install dependencies with `npm ci`.
 
 Build the site with `npm run build`. Vite writes `dist/` with the base path `/resume-site/`. Asset URLs in that build are relative, so they resolve under the project path.
 
-Check the site with `npm run check`. The command formats nothing. It builds `dist/`, then checks format, HTML, links, privacy, and tests. It then runs the CI Semgrep command, `semgrep --config p/default --error --metrics=off`. Semgrep is not installed by `npm ci`. Install it with `pipx install semgrep`, the same step as `.github/workflows/ci.yml`. If `semgrep` is not on `PATH`, `npm run check` exits and prints that install step.
+Check the site with `npm run check`. The command formats nothing. It builds `dist/`, then checks format, HTML, links, privacy, and tests. It then runs the CI Semgrep command, `semgrep --config p/default --error`. Semgrep is not installed by `npm ci`. Install it with `pipx install semgrep`, the same step as `.github/workflows/ci.yml`. If `semgrep` is not on `PATH`, `npm run check` exits and prints that install step.
 
 ## Deploy
 

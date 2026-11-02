@@ -1,6 +1,6 @@
 import { spawnSync } from "node:child_process";
 
-const args = ["--config", "p/default", "--error", "--metrics=off"];
+const args = ["--config", "p/default", "--error"];
 const result = spawnSync("semgrep", args, { stdio: "inherit" });
 
 if (result.error) {
