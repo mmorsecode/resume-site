@@ -303,16 +303,100 @@ function privacyFindings(text) {
   return findings;
 }
 
-async function fetchStatus(url) {
-  try {
-    const response = await fetch(url, {
-      redirect: "follow",
-      signal: AbortSignal.timeout(20000),
-    });
-    return response.status;
-  } catch (error) {
-    return error.name === "TimeoutError" ? 0 : 0;
+function errorDetail(error) {
+  if (error instanceof Error) {
+    const label = error.name && error.name !== "Error" ? `${error.name}: ` : "";
+    return `${label}${error.message}`;
   }
+  return String(error);
+}
+
+// undici can throw assert(!this.paused) from the parser, outside the fetch
+// promise. Hold the listener for the whole site-links fetch pass so that
+// failure is reported instead of killing the process.
+function runtimeGuard() {
+  const rejections = new Set();
+  let activeError = null;
+  let abortInFlight = null;
+
+  function onError(error) {
+    const wrapped = error instanceof Error ? error : new Error(String(error));
+    activeError = wrapped;
+    abortInFlight?.();
+    for (const reject of rejections) {
+      reject(wrapped);
+    }
+    rejections.clear();
+  }
+
+  process.on("uncaughtException", onError);
+  process.on("unhandledRejection", onError);
+
+  return {
+    take() {
+      const error = activeError;
+      activeError = null;
+      return error;
+    },
+    run(operation) {
+      activeError = null;
+      const controller = new AbortController();
+      abortInFlight = () => controller.abort();
+      return new Promise((resolve, reject) => {
+        let settled = false;
+        const finish = (callback, value) => {
+          if (settled) {
+            return;
+          }
+          settled = true;
+          rejections.delete(reject);
+          callback(value);
+        };
+        rejections.add(reject);
+        Promise.resolve()
+          .then(() => operation(controller.signal))
+          .then(
+            (value) => {
+              finish(activeError ? reject : resolve, activeError ?? value);
+            },
+            (error) => {
+              finish(reject, activeError ?? error);
+            },
+          );
+      });
+    },
+    stop() {
+      abortInFlight = null;
+      process.off("uncaughtException", onError);
+      process.off("unhandledRejection", onError);
+    },
+  };
+}
+
+async function readResource(url, signal) {
+  const response = await fetch(url, {
+    redirect: "follow",
+    signal: AbortSignal.any([signal, AbortSignal.timeout(20000)]),
+  });
+  const body = Buffer.from(await response.arrayBuffer());
+  return { status: response.status, body };
+}
+
+async function fetchResource(url, guard) {
+  let lastError = null;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const result = await guard.run((signal) => readResource(url, signal));
+      const trailing = guard.take();
+      if (trailing) {
+        throw trailing;
+      }
+      return result;
+    } catch (error) {
+      lastError = guard.take() ?? error;
+    }
+  }
+  throw new Error(`GET ${url} failed: ${errorDetail(lastError)}`);
 }
 
 function sendCommand(socket, pending, method, params = {}, sessionId) {
@@ -583,45 +667,64 @@ async function capturePage(url, chromeBin, screenshot, viewport) {
 
 async function linkReport(snapshot) {
   const { observed } = snapshot;
-  const pageUrl = observed.pageUrl;
   const resources = observed.referenced.map((item) => ({
     kind: "document",
     tag: item.tag,
     raw: item.raw,
     url: item.url,
   }));
-  if (observed.stylesheetAbsolute) {
-    const cssResponse = await fetch(observed.stylesheetAbsolute);
-    const css = await cssResponse.text();
-    for (const item of cssUrls(css, observed.stylesheetAbsolute)) {
-      resources.push({
-        kind: "stylesheet",
-        tag: "css",
-        raw: item.raw,
-        url: item.url,
+  const checked = [];
+  const guard = runtimeGuard();
+  try {
+    if (observed.stylesheetAbsolute) {
+      const cssResponse = await fetchResource(
+        observed.stylesheetAbsolute,
+        guard,
+      );
+      const css = cssResponse.body.toString("utf8");
+      for (const item of cssUrls(css, observed.stylesheetAbsolute)) {
+        resources.push({
+          kind: "stylesheet",
+          tag: "css",
+          raw: item.raw,
+          url: item.url,
+        });
+      }
+    }
+    const browserStatus = new Map();
+    for (const item of snapshot.network) {
+      if (item.url) {
+        browserStatus.set(item.url, item.status);
+      }
+    }
+    for (const resource of resources) {
+      const fromBrowser = browserStatus.get(resource.url);
+      let status = fromBrowser;
+      let via = "browser";
+      if (typeof fromBrowser !== "number") {
+        const fetched = await fetchResource(resource.url, guard);
+        status = fetched.status;
+        via = "fetch";
+      }
+      checked.push({
+        ...resource,
+        status,
+        via,
       });
     }
-  }
-  const browserStatus = new Map();
-  for (const item of snapshot.network) {
-    if (item.url) {
-      browserStatus.set(item.url, item.status);
+    const trailing = guard.take();
+    if (trailing) {
+      throw new Error(`site-links fetch failed: ${errorDetail(trailing)}`);
     }
+    return checked;
+  } catch (error) {
+    if (error && typeof error === "object") {
+      error.partialLinks = checked;
+    }
+    throw error;
+  } finally {
+    guard.stop();
   }
-  const checked = [];
-  for (const resource of resources) {
-    const fromBrowser = browserStatus.get(resource.url);
-    const status =
-      typeof fromBrowser === "number"
-        ? fromBrowser
-        : await fetchStatus(resource.url);
-    checked.push({
-      ...resource,
-      status,
-      via: typeof fromBrowser === "number" ? "browser" : "fetch",
-    });
-  }
-  return checked;
 }
 
 function requireResource(problems, links, predicate, label) {
@@ -853,8 +956,16 @@ async function drive(feature) {
   }
 
   let links = [];
+  let infraError = null;
   if (feature === "site-links") {
-    links = await linkReport(captured);
+    try {
+      links = await linkReport(captured);
+    } catch (error) {
+      infraError = errorDetail(error);
+      if (Array.isArray(error?.partialLinks)) {
+        links = error.partialLinks;
+      }
+    }
   }
   let privacy = null;
   if (feature === "contact-privacy") {
@@ -887,8 +998,36 @@ async function drive(feature) {
     privacy,
     network: captured.network,
   };
-  snapshot.problems = unmet(feature, captured, links, privacy);
-  await writeFile(resultPath, `${JSON.stringify(snapshot, null, 2)}\n`);
+  if (infraError) {
+    snapshot.infra_error = infraError;
+    snapshot.problems = [];
+  } else {
+    try {
+      snapshot.problems = unmet(feature, captured, links, privacy);
+    } catch (error) {
+      if (feature !== "site-links") {
+        throw error;
+      }
+      infraError = errorDetail(error);
+      snapshot.infra_error = infraError;
+      snapshot.problems = [];
+    }
+  }
+  try {
+    await writeFile(resultPath, `${JSON.stringify(snapshot, null, 2)}\n`);
+  } catch (error) {
+    if (!infraError) {
+      throw error;
+    }
+    process.stderr.write(`${errorDetail(error)}\n`);
+    process.exitCode = 3;
+    return;
+  }
+  if (infraError) {
+    process.stderr.write(`${infraError}\n`);
+    process.exitCode = 3;
+    return;
+  }
   if (snapshot.problems.length > 0) {
     fail(snapshot.problems.join("; "));
     return;
