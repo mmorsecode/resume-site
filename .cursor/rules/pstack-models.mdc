@@ -7,6 +7,11 @@ alwaysApply: true
 # budget: small (medium)
 # usage caps (Mike watches his usage pool): swarm at most 3 workers per run; at most 2 parallel workers anywhere else; panels stay at 2 entries; no nested fan-out.
 # builder/verifier pairing: builders run on Grok; every PR is verified by a Claude-family verifier before it goes to review.
+# The verifier never posts comments.
+# The verifier never launches other agents or models.
+# The verifier returns its report as its final message, and that message starts with `head: <sha>`.
+# The agent that launched the verifier posts that report as the PR comment.
+# A builder never starts its own verifier.
 feature, refactoring: grok-4.7-medium-fast
 bug-fix: grok-4.7-medium-fast
 perf-issue: grok-4.7-medium-fast
