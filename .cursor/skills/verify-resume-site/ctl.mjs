@@ -311,9 +311,35 @@ function errorDetail(error) {
   return String(error);
 }
 
+function isParserAssertion(error) {
+  return errorDetail(error).includes("!this.paused");
+}
+
+function previewOrigin(pageUrl) {
+  if (!pageUrl) {
+    return null;
+  }
+  try {
+    return new URL(pageUrl).origin;
+  } catch {
+    return null;
+  }
+}
+
+function isPreviewUrl(url, origin) {
+  if (!origin) {
+    return false;
+  }
+  try {
+    return new URL(url).origin === origin;
+  } catch {
+    return false;
+  }
+}
+
 // undici can throw assert(!this.paused) from the parser, outside the fetch
-// promise. Hold the listener for the whole site-links fetch pass so that
-// failure is reported instead of killing the process.
+// promise. The listener accepts only that assertion. Any other uncaught
+// error is rethrown so a bug in the check still crashes the process.
 function runtimeGuard() {
   const rejections = new Set();
   let activeError = null;
@@ -321,6 +347,11 @@ function runtimeGuard() {
 
   function onError(error) {
     const wrapped = error instanceof Error ? error : new Error(String(error));
+    if (!isParserAssertion(wrapped)) {
+      process.off("uncaughtException", onError);
+      process.off("unhandledRejection", onError);
+      throw wrapped;
+    }
     activeError = wrapped;
     abortInFlight?.();
     for (const reject of rejections) {
@@ -382,7 +413,7 @@ async function readResource(url, signal) {
   return { status: response.status, body };
 }
 
-async function fetchResource(url, guard) {
+async function fetchResource(url, guard, origin) {
   let lastError = null;
   for (let attempt = 0; attempt < 2; attempt += 1) {
     try {
@@ -396,7 +427,10 @@ async function fetchResource(url, guard) {
       lastError = guard.take() ?? error;
     }
   }
-  throw new Error(`GET ${url} failed: ${errorDetail(lastError)}`);
+  if (isParserAssertion(lastError) || isPreviewUrl(url, origin)) {
+    throw new Error(`GET ${url} failed: ${errorDetail(lastError)}`);
+  }
+  return { status: 0, body: Buffer.alloc(0) };
 }
 
 function sendCommand(socket, pending, method, params = {}, sessionId) {
@@ -501,32 +535,42 @@ async function capturePage(url, chromeBin, screenshot, viewport) {
     ],
     { stdio: ["ignore", "ignore", "pipe"] },
   );
+  let socket;
   try {
     const debugPort = await new Promise((resolve, reject) => {
+      let settled = false;
       let text = "";
-      const timer = setTimeout(
-        () => reject(new Error("chrome did not open a debug port")),
-        10000,
-      );
-      chrome.stderr.on("data", (chunk) => {
+      const finish = (callback, value) => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        clearTimeout(timer);
+        callback(value);
+      };
+      const timer = setTimeout(() => {
+        finish(reject, new Error("chrome did not open a debug port"));
+      }, 10000);
+      chrome.once("error", (error) => {
+        finish(reject, error);
+      });
+      chrome.stderr?.on("data", (chunk) => {
         text += chunk.toString();
         const match = text.match(
           /DevTools listening on ws:\/\/127\.0\.0\.1:(\d+)\//,
         );
         if (match) {
-          clearTimeout(timer);
-          resolve(Number(match[1]));
+          finish(resolve, Number(match[1]));
         }
       });
       chrome.once("exit", () => {
-        clearTimeout(timer);
-        reject(new Error("chrome exited before opening a debug port"));
+        finish(reject, new Error("chrome exited before opening a debug port"));
       });
     });
     const version = await fetch(
       `http://127.0.0.1:${debugPort}/json/version`,
     ).then((response) => response.json());
-    const socket = new WebSocket(version.webSocketDebuggerUrl);
+    socket = new WebSocket(version.webSocketDebuggerUrl);
     await new Promise((resolve, reject) => {
       socket.addEventListener("open", resolve, { once: true });
       socket.addEventListener(
@@ -601,8 +645,29 @@ async function capturePage(url, chromeBin, screenshot, viewport) {
         resolve();
       };
     });
-    await sendCommand(socket, pending, "Page.navigate", { url }, sessionId);
-    await loaded;
+    const navigated = sendCommand(
+      socket,
+      pending,
+      "Page.navigate",
+      { url },
+      sessionId,
+    );
+    await new Promise((resolve, reject) => {
+      let navigationDone = false;
+      let loadDone = false;
+      navigated.then(() => {
+        navigationDone = true;
+        if (loadDone) {
+          resolve();
+        }
+      }, reject);
+      loaded.then(() => {
+        loadDone = true;
+        if (navigationDone) {
+          resolve();
+        }
+      }, reject);
+    });
     await sendCommand(
       socket,
       pending,
@@ -630,6 +695,7 @@ async function capturePage(url, chromeBin, screenshot, viewport) {
     );
     await writeFile(screenshot, Buffer.from(shot.data, "base64"));
     socket.close();
+    socket = null;
     const documentResponse = network.find(
       (item) =>
         item.type === "Document" &&
@@ -651,6 +717,7 @@ async function capturePage(url, chromeBin, screenshot, viewport) {
       })),
     };
   } finally {
+    socket?.close();
     if (pidAlive(chrome.pid)) {
       chrome.kill("SIGTERM");
     }
@@ -675,11 +742,13 @@ async function linkReport(snapshot) {
   }));
   const checked = [];
   const guard = runtimeGuard();
+  const origin = previewOrigin(observed.pageUrl);
   try {
     if (observed.stylesheetAbsolute) {
       const cssResponse = await fetchResource(
         observed.stylesheetAbsolute,
         guard,
+        origin,
       );
       const css = cssResponse.body.toString("utf8");
       for (const item of cssUrls(css, observed.stylesheetAbsolute)) {
@@ -702,7 +771,7 @@ async function linkReport(snapshot) {
       let status = fromBrowser;
       let via = "browser";
       if (typeof fromBrowser !== "number") {
-        const fetched = await fetchResource(resource.url, guard);
+        const fetched = await fetchResource(resource.url, guard, origin);
         status = fetched.status;
         via = "fetch";
       }
@@ -950,6 +1019,8 @@ async function drive(feature) {
       screenshot,
       problems: feature === "site-links" ? [] : [error.message],
     };
+    // Chrome launch and page-load failures exit 3 only for site-links.
+    // resume-page, mobile-layout, and contact-privacy still exit 1.
     if (feature === "site-links") {
       snapshot.infra_error = errorDetail(error);
     }
@@ -1010,16 +1081,7 @@ async function drive(feature) {
     snapshot.infra_error = infraError;
     snapshot.problems = [];
   } else {
-    try {
-      snapshot.problems = unmet(feature, captured, links, privacy);
-    } catch (error) {
-      if (feature !== "site-links") {
-        throw error;
-      }
-      infraError = errorDetail(error);
-      snapshot.infra_error = infraError;
-      snapshot.problems = [];
-    }
+    snapshot.problems = unmet(feature, captured, links, privacy);
   }
   try {
     await writeFile(resultPath, `${JSON.stringify(snapshot, null, 2)}\n`);
