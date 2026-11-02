@@ -746,7 +746,7 @@ async function capturePage(url, chromeBin, screenshot, viewport) {
   }
 }
 
-async function linkReport(snapshot) {
+export async function linkReport(snapshot) {
   const { observed } = snapshot;
   const resources = observed.referenced.map((item) => ({
     kind: "document",
@@ -820,7 +820,7 @@ function requireResource(problems, links, predicate, label) {
   }
 }
 
-function unmet(feature, snapshot, links, privacy) {
+export function unmet(feature, snapshot, links, privacy) {
   const { observed } = snapshot;
   const problems = [];
   const viewport = viewports[feature];
@@ -1139,15 +1139,20 @@ async function cleanup() {
   process.stdout.write("cleanup ok evidence kept in verify-evidence/\n");
 }
 
-const [command, feature] = process.argv.slice(2);
-if (command === "launch") {
-  await launch();
-} else if (command === "doctor") {
-  await doctor();
-} else if (command === "drive") {
-  await drive(feature);
-} else if (command === "cleanup") {
-  await cleanup();
-} else {
-  fail("usage: ctl.mjs launch | doctor | drive <feature> | cleanup");
+const invokedDirectly =
+  process.argv[1] &&
+  path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+if (invokedDirectly) {
+  const [command, feature] = process.argv.slice(2);
+  if (command === "launch") {
+    await launch();
+  } else if (command === "doctor") {
+    await doctor();
+  } else if (command === "drive") {
+    await drive(feature);
+  } else if (command === "cleanup") {
+    await cleanup();
+  } else {
+    fail("usage: ctl.mjs launch | doctor | drive <feature> | cleanup");
+  }
 }
