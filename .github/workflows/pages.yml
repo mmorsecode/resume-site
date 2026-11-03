@@ -36,21 +36,21 @@ jobs:
           id="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow CI --branch main --event push --status success --limit 1 --json databaseId --jq '.[0].databaseId')"
           test -n "$id"
           echo "id=$id" >> "$GITHUB_OUTPUT"
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         if: github.event_name == 'workflow_run'
         with:
           name: pages-dist
           path: dist
           run-id: ${{ github.event.workflow_run.id }}
           github-token: ${{ github.token }}
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         if: github.event_name == 'workflow_dispatch'
         with:
           name: pages-dist
           path: dist
           run-id: ${{ steps.ci.outputs.id }}
           github-token: ${{ github.token }}
-      - uses: actions/upload-pages-artifact@7b1f4a764d45c48632c6b24a0339c27f5614fb0b # v4
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
           path: dist
       - uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5
