@@ -103,3 +103,46 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - run: pipx install semgrep
       - run: semgrep --config p/default --error
+  permissions:
+    name: permissions
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Flag excessive permissions
+        run: |
+          version=1.31.1
+          archive="zizmor-x86_64-unknown-linux-gnu.tar.gz"
+          curl -fsSL -o "$archive" "https://github.com/zizmorcore/zizmor/releases/download/v${version}/${archive}"
+          echo "d185f726bdaf92df78273217dfdd24ebcd6b0ef48cf3ce776ff5762b6e138c99  ${archive}" | sha256sum -c
+          tar -xzf "$archive" zizmor
+          ./zizmor --offline --no-config --no-ignores --persona=pedantic --collect=workflows --format=json --no-exit-codes --no-progress . > zizmor.json
+          python3 - <<'PY'
+          import json
+          import sys
+
+          findings = json.load(open("zizmor.json"))
+          hits = [
+              finding
+              for finding in findings
+              if finding.get("ident") == "excessive-permissions"
+          ]
+          if not hits:
+              print("excessive-permissions: no findings")
+              sys.exit(0)
+          for finding in hits:
+              for location in finding["locations"]:
+                  path = location["symbolic"]["key"]["Local"]["verbatim_path"]
+                  concrete = location.get("concrete") or {}
+                  point = (concrete.get("location") or {}).get("start_point") or {}
+                  row = point.get("row")
+                  line = "" if row is None else str(row + 1)
+                  print(f"excessive-permissions: {path}:{line}: {finding['desc']}")
+                  annotation = location["symbolic"].get("annotation")
+                  if annotation:
+                      print(f"  {annotation}")
+          sys.exit(1)
+          PY
