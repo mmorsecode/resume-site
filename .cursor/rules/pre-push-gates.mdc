@@ -1,0 +1,25 @@
+---
+description: Run the CI scanners before every push
+alwaysApply: true
+---
+
+Before any push, run the CI scanners and do not push if either exits non-zero.
+
+Semgrep, copied from `.github/workflows/ci.yml`:
+
+`semgrep --config p/default --error`
+
+Install Semgrep the way that job does: `pipx install semgrep`. Semgrep is not installed by `npm ci`. `npm run check` runs that Semgrep command. If `semgrep` is not on `PATH`, `npm run check` exits and prints that install step.
+
+Gitleaks, copied from the push scan in `.github/workflows/ci.yml`. Install the binary, then run it:
+
+```
+version=8.30.1
+archive="gitleaks_${version}_linux_x64.tar.gz"
+curl -fsSL -o "$archive" "https://github.com/gitleaks/gitleaks/releases/download/v${version}/${archive}"
+echo "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb  ${archive}" | sha256sum -c
+tar -xzf "$archive" gitleaks
+./gitleaks detect --source . --redact --verbose --exit-code 1
+```
+
+`./gitleaks` is the binary that install step unpacks in the current directory. A `gitleaks` binary already on `PATH` is the same scanner. Run `gitleaks detect --source . --redact --verbose --exit-code 1` in that case.

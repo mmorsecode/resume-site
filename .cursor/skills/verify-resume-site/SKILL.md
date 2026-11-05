@@ -53,6 +53,12 @@ Replace `resume-page` with `mobile-layout`, `site-links`, or `contact-privacy`. 
 
 `resume-page` uses a 1280 by 800 viewport. `mobile-layout` uses a 390 by 844 viewport. The other two features use the desktop viewport. A failed check exits 1 and still writes `result.json`.
 
+`site-links` can also exit 3. Exit 3 writes `infra_error` in `result.json` and never counts as a pass. The verifier reruns that drive once. A second exit 3 means the drive is blocked and gets escalated. It is not retried a third time.
+
+Exit 3 covers the local preview and undici's `!this.paused` parser assertion. That is Chrome failing to start, a page-load timeout, or a fetch that fails against the preview origin. An unreachable external link stays a link failure. Its status is 0, `problems` names it, and the drive exits 1. That result has no `infra_error`.
+
+Chrome failing to launch exits 3 only for `site-links`. `resume-page`, `mobile-layout`, and `contact-privacy` still exit 1 when Chrome does not start.
+
 ## Evidence
 
 `result.json` records the feature id, the local URL, the viewport, the navigation status, and the text and layout Chrome read. `page.png` is the full page at that viewport, taken after the load, not instead of the checks.

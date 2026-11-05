@@ -9,12 +9,14 @@ updates:
     cooldown:
       default-days: 7
     groups:
-      minor-and-patch:
+      production-dependencies:
+        dependency-type: production
         patterns:
           - "*"
-        update-types:
-          - minor
-          - patch
+      dev-dependencies:
+        dependency-type: development
+        patterns:
+          - "*"
   - package-ecosystem: github-actions
     directory: "/"
     schedule:
@@ -24,9 +26,6 @@ updates:
     cooldown:
       default-days: 7
     groups:
-      minor-and-patch:
+      actions:
         patterns:
           - "*"
-        update-types:
-          - minor
-          - patch
